@@ -1,0 +1,23 @@
+[project]
+name = "cargoloader"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "poqoyh",email = "poqoyhartyom@yandex.ru"}
+]
+requires-python = ">=3.12"
+dependencies = [
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+package-mode = false
+
+[dependency-groups]
+dev = [
+    "pytest (>=9.1.1,<10.0.0)"
+]
