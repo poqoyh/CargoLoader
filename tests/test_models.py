@@ -74,4 +74,4 @@ def test_vehicle_non_positive_max_weight():
             max_weight=0,
         )
 
-    assert "Cargo weight must be positive." in str(exc_info.value)
+    assert "Vehicle weight must be positive." in str(exc_info.value)
