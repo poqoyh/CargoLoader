@@ -7,6 +7,7 @@ class Cargo:
     width: float | int  # meters
     height: float | int  # meters
     weight: float | int  # kg
+    name: str = ""
     max_load_above: float | int = 0.0  # kg
     quantity: int = 1
 
@@ -41,9 +42,20 @@ class Vehicle:
         return self.length * self.width * self.height
 
 
-@dataclass
+@dataclass(frozen=True)
 class PlacedItem:
     cargo: Cargo
     x: float | int
     y: float | int
     z: float | int
+
+    def __post_init__(self):
+        if self.x < 0 or self.y < 0 or self.z < 0:
+            raise ValueError("Coordinates must be non-negative.")
+
+
+@dataclass
+class LoadResult:
+    fits: bool
+    volume_percent: float
+    weight_percent: float
