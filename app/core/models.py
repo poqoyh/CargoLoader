@@ -10,6 +10,7 @@ class Cargo:
     name: str = ""
     max_load_above: float | int = 0.0  # kg
     quantity: int = 1
+    upright: bool = False
 
     def __post_init__(self):
         if self.length <= 0 or self.width <= 0 or self.height <= 0:
