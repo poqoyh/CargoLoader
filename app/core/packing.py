@@ -1,5 +1,6 @@
 from typing import List
 from dataclasses import replace
+from itertools import permutations
 
 from app.core.checks import EPS
 
@@ -14,6 +15,21 @@ def expand(cargos: List[Cargo]) -> List[Cargo]:
             items.append(replace(cargo, quantity=1))
 
     return items
+
+
+def orientations(cargo: Cargo) -> List[Cargo]:
+    """
+    Все допустимые повороты груза (без повторов)
+    """
+    if cargo.upright:
+        sizes = {
+            (cargo.length, cargo.width, cargo.height),
+            (cargo.width, cargo.length, cargo.height),
+        }
+    else:
+        sizes = set(permutations((cargo.length, cargo.width, cargo.height)))
+
+    return [replace(cargo, length=l, width=w, height=h) for l, w, h in sorted(sizes)]
 
 
 def pack(vehicle: Vehicle, cargos: List[Cargo]) -> tuple[list[PlacedItem], list[Cargo]]:
