@@ -1,5 +1,7 @@
 import pytest
-from app.core.models import Cargo, Vehicle
+from dataclasses import FrozenInstanceError
+
+from app.core.models import Cargo, Vehicle, PlacedItem
 
 # Cargo
 
@@ -39,6 +41,14 @@ def test_cargo_non_positive_weight():
     assert "Cargo weight must be positive." in str(exc_info.value)
 
 
+def test_cargo_defaults():
+    c = Cargo(length=1, width=1, height=1, weight=1)
+
+    assert c.name == ""
+    assert c.quantity == 1
+    assert c.max_load_above == 0
+
+
 # Vehicle
 
 
@@ -75,3 +85,25 @@ def test_vehicle_non_positive_max_weight():
         )
 
     assert "Vehicle weight must be positive." in str(exc_info.value)
+
+
+# parametrize
+@pytest.mark.parametrize(
+    "x,y,z",
+    [
+        (-1, 0, 0),
+        (0, -1, 0),
+        (0, 0, -1),
+    ],
+)
+def test_placed_item_negative_coordinates(x, y, z):
+    cargo = Cargo(length=1, width=1, height=1, weight=1)
+
+    with pytest.raises(ValueError):
+        PlacedItem(cargo, x, y, z)
+
+
+def test_placed_item_is_frozen():
+    item = PlacedItem(Cargo(length=1, width=1, height=1, weight=1), 0, 0, 0)
+    with pytest.raises(FrozenInstanceError):
+        item.x = 5
