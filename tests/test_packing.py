@@ -1,6 +1,8 @@
+import pytest
+
 from app.core.models import Cargo, Vehicle
-from app.core.checks import inside, overlaps
-from app.core.packing import expand, pack
+from app.core.checks import inside, overlaps, validate
+from app.core.packing import expand, pack, orientations
 
 
 def make_box(l=1, w=1, h=1, weight=1, **kwargs):
@@ -141,3 +143,59 @@ def test_pack_invariant_no_overlaps_and_inside():
     for i, a in enumerate(placed):
         for b in placed[i + 1 :]:
             assert not overlaps(a, b)
+
+
+# известный дефект послойной укладки
+
+
+@pytest.mark.xfail(reason="послойная укладка не проверяет опору")
+def test_pack_leaves_no_floating_boxes():
+    truck = Vehicle(2, 1, 4, 1000)
+    cargos = [
+        Cargo(1.5, 1, 1, 1, name="flat"),
+        Cargo(0.5, 1, 2, 1, name="tall"),
+        Cargo(0.9, 1, 1, 1, name="top"),
+    ]
+    placed, _ = pack(truck, cargos)
+    assert validate(truck, placed) == []
+
+
+# orientations
+
+
+def sizes(cargos):
+    return {(c.length, c.width, c.height) for c in cargos}
+
+
+def test_orientations_cube():
+    assert len(orientations(make_box(1, 1, 1))) == 1
+
+
+def test_orientations_regular_box():
+    assert len(orientations(make_box(1, 2, 3))) == 6
+
+
+def test_orientations_two_equal_sides():
+    assert len(orientations(make_box(1, 1, 2))) == 3
+
+
+def test_orientations_upright():
+    result = orientations(make_box(1, 2, 3, upright=True))
+    assert sizes(result) == {(1, 2, 3), (2, 1, 3)}
+
+
+def test_orientations_upright_square_base():
+    assert len(orientations(make_box(1, 1, 3, upright=True))) == 1
+
+
+def test_orientations_keep_volume_and_fields():
+    box = make_box(1, 2, 3, weight=7, name="A")
+    for o in orientations(box):
+        assert o.volume == pytest.approx(box.volume)
+        assert o.weight == 7 and o.name == "A"
+
+
+def test_orientations_do_not_change_original():
+    box = make_box(1, 2, 3)
+    orientations(box)
+    assert (box.length, box.width, box.height) == (1, 2, 3)
