@@ -1,6 +1,8 @@
 from typing import List
 from dataclasses import replace
 
+from app.core.checks import EPS
+
 from app.core.models import Cargo, Vehicle, PlacedItem
 
 
@@ -26,39 +28,42 @@ def pack(vehicle: Vehicle, cargos: List[Cargo]) -> tuple[list[PlacedItem], list[
     z = 0
 
     row_width = 0
-    row_height = 0
+    layer_height = 0
+    total_weight = 0
 
     for item in items:
         if (
-            item.width > vehicle.width
-            or item.height > vehicle.height
-            or item.length > vehicle.length
+            item.width > vehicle.width + EPS
+            or item.height > vehicle.height + EPS
+            or item.length > vehicle.length + EPS
+            or total_weight + item.weight > vehicle.max_weight + EPS
         ):
             not_placed.append(item)
             continue
 
-        if x + item.length > vehicle.length:
+        if x + item.length > vehicle.length + EPS:
             x = 0
             y = y + row_width
             row_width = 0
 
-        if y + item.width > vehicle.width:
+        if y + item.width > vehicle.width + EPS:
             x = 0
             y = 0
-            z = z + row_height
+            z = z + layer_height
 
             row_width = 0
-            row_height = 0
+            layer_height = 0
 
-        if z + item.height > vehicle.height:
+        if z + item.height > vehicle.height + EPS:
             not_placed.append(item)
             continue
 
         placed.append(PlacedItem(item, x, y, z))
+        total_weight += item.weight
 
         x = x + item.length
 
         row_width = max(row_width, item.width)
-        row_height = max(row_height, item.height)
+        layer_height = max(layer_height, item.height)
 
     return placed, not_placed

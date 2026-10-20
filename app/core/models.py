@@ -16,6 +16,10 @@ class Cargo:
             raise ValueError("Cargo dimensions must be positive.")
         if self.weight <= 0:
             raise ValueError("Cargo weight must be positive.")
+        if self.quantity < 1:
+            raise ValueError("Cargo quantity must be at least 1.")
+        if self.max_load_above < 0:
+            raise ValueError("Cargo max load above must be non-negative.")
 
     @property
     def volume(self) -> float:

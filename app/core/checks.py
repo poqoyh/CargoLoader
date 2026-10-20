@@ -2,6 +2,8 @@ from typing import List
 
 from app.core.models import Cargo, Vehicle, PlacedItem, LoadResult
 
+EPS = 1e-9
+
 
 def check_load(vehicle: Vehicle, cargos: List[Cargo]) -> LoadResult:
     total_volume = sum(cargo.volume * cargo.quantity for cargo in cargos)
@@ -22,11 +24,11 @@ def check_load(vehicle: Vehicle, cargos: List[Cargo]) -> LoadResult:
 def inside(vehicle: Vehicle, item: PlacedItem) -> bool:
     return (
         item.x >= 0
-        and item.x + item.cargo.length <= vehicle.length
+        and item.x + item.cargo.length <= vehicle.length + EPS
         and item.y >= 0
-        and item.y + item.cargo.width <= vehicle.width
+        and item.y + item.cargo.width <= vehicle.width + EPS
         and item.z >= 0
-        and item.z + item.cargo.height <= vehicle.height
+        and item.z + item.cargo.height <= vehicle.height + EPS
     )
 
 
@@ -36,7 +38,7 @@ def segments_overlap(
     b_start: float | int,
     b_end: float | int,
 ) -> bool:
-    return a_start < b_end and b_start < a_end
+    return a_start < b_end - EPS and b_start < a_end - EPS
 
 
 def overlaps(a: PlacedItem, b: PlacedItem) -> bool:
