@@ -9,6 +9,7 @@ from app.core.checks import (
     load_on,
     is_overloaded,
     validate,
+    can_place,
 )
 
 
@@ -248,6 +249,14 @@ def test_supported_on_two_neighbours():
     assert is_supported(item, [left, right, item]) is True
 
 
+def test_supported_non_cube_box():
+    base = PlacedItem(make_box(1, 2, 1), 0, 0, 0)
+    item = PlacedItem(
+        make_box(1, 2, 3), 0, 0, 1
+    )  # высокая, но на основание встаёт целиком
+    assert is_supported(item, [base, item]) is True
+
+
 # load_on / is_overloaded
 
 
@@ -317,3 +326,54 @@ def test_validate_overloaded():
     fragile = PlacedItem(make_box(max_load_above=0), 0, 0, 0)
     top = PlacedItem(make_box(weight=1), 0, 0, 1)
     assert validate(truck, [fragile, top]) == ["item 0 is overloaded"]
+
+
+# can place
+def test_can_place_on_floor():
+    candidate = PlacedItem(make_box(1, 2, 0.5), 0, 0, 0)
+    assert can_place(TRUCK, candidate, [], 0) is True
+
+
+def test_cannot_place_on_occupied_spot():
+    box = make_box(1, 2, 0.5)
+    placed = [PlacedItem(box, 0, 0, 0)]
+    candidate = PlacedItem(box, 0.5, 0, 0)
+    assert can_place(TRUCK, candidate, placed, 1) is False
+
+
+def test_cannot_place_in_the_air():
+    candidate = PlacedItem(make_box(1, 2, 0.5), 0, 0, 1)  # под ней пусто
+    assert can_place(TRUCK, candidate, [], 0) is False
+
+
+def test_cannot_place_outside_vehicle():
+    candidate = PlacedItem(make_box(1, 2, 0.5), 2.5, 0, 0)  # конец на 3.5, кузов 3
+    assert can_place(TRUCK, candidate, [], 0) is False
+
+
+def test_can_place_on_strong_box():
+    base = PlacedItem(make_box(1, 2, 0.5, max_load_above=30), 0, 0, 0)
+    candidate = PlacedItem(make_box(1, 2, 0.5, weight=20), 0, 0, 0.5)
+    assert can_place(TRUCK, candidate, [base], 1) is True
+
+
+def test_cannot_place_if_lower_box_overloaded():
+    base = PlacedItem(make_box(1, 2, 0.5, max_load_above=10), 0, 0, 0)
+    candidate = PlacedItem(make_box(1, 2, 0.5, weight=20), 0, 0, 0.5)
+    assert can_place(TRUCK, candidate, [base], 1) is False
+
+
+def test_cannot_place_if_vehicle_weight_exceeded():
+    light_truck = Vehicle(3, 2, 2, 10)
+    candidate = PlacedItem(make_box(1, 2, 0.5, weight=5), 0, 0, 0)
+    assert can_place(light_truck, candidate, [], 8) is False  # 8 + 5 > 10
+    assert can_place(light_truck, candidate, [], 5) is True  # 5 + 5 = 10
+
+
+def test_cannot_place_under_box_it_cannot_carry():
+    truck = Vehicle(3, 1, 2, 1000)
+    a1 = PlacedItem(make_box(1, 1, 1, max_load_above=50), 0, 0, 0)
+    a2 = PlacedItem(make_box(1, 1, 1, max_load_above=50), 1.2, 0, 0)
+    bridge = PlacedItem(make_box(2.2, 1, 1, weight=5), 0, 0, 1)  # лежит на a1 и a2
+    gap_box = PlacedItem(make_box(0.2, 1, 1), 1, 0, 0)  # в зазоре, max_load_above=0
+    assert can_place(truck, gap_box, [a1, a2, bridge], 10) is False

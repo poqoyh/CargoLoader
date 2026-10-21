@@ -71,7 +71,7 @@ def is_supported(item: PlacedItem, placed: list[PlacedItem]) -> bool:
     if item.z <= EPS:
         return True
 
-    base_area = item.cargo.length * item.cargo.height
+    base_area = item.cargo.length * item.cargo.width
     supported_area = 0
 
     for other in placed:
@@ -126,3 +126,40 @@ def validate(vehicle: Vehicle, placed: list[PlacedItem]) -> list[str]:
                 problems.append(f"items {i} and {j} overlap")
 
     return problems
+
+
+def can_place(
+    vehicle: Vehicle,
+    candidate: PlacedItem,
+    placed: list[PlacedItem],
+    total_weight: float,
+) -> bool:
+    """
+    Можно ли поставить candidate к уже стоящим коробкам placed.
+    """
+    if total_weight + candidate.cargo.weight > vehicle.max_weight + EPS:
+        return False
+
+    if not inside(vehicle, candidate):
+        return False
+
+    for other in placed:
+        if overlaps(candidate, other):
+            return False
+
+    if not is_supported(candidate, placed):
+        return False
+
+    with_candidate = placed + [candidate]
+
+    # выдержит ли сама candidate коробки, которые уже стоят над ней
+    if is_overloaded(candidate, with_candidate):
+        return False
+
+    # не перегрузим ли коробки, на которые встанет candidate
+    for other in placed:
+        other_top = other.z + other.cargo.height
+        if abs(other_top - candidate.z) <= EPS and is_overloaded(other, with_candidate):
+            return False
+
+    return True

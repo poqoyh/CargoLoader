@@ -1,8 +1,10 @@
 import pytest
 
-from app.core.models import Cargo, Vehicle
+import random
+
+from app.core.models import Cargo, Vehicle, PlacedItem
 from app.core.checks import inside, overlaps, validate
-from app.core.packing import expand, pack, orientations
+from app.core.packing import expand, pack_layers, orientations, candidate_points, pack
 
 
 def make_box(l=1, w=1, h=1, weight=1, **kwargs):
@@ -41,101 +43,103 @@ def test_expand_several_cargos():
 # pack
 
 
-def test_pack_empty():
-    assert pack(Vehicle(3, 1, 1, 1000), []) == ([], [])
+def test_pack_layers_empty():
+    assert pack_layers(Vehicle(3, 1, 1, 1000), []) == ([], [])
 
 
-def test_pack_single_box_at_origin():
-    placed, not_placed = pack(Vehicle(3, 2, 2, 1000), [make_box()])
+def test_pack_layers_single_box_at_origin():
+    placed, not_placed = pack_layers(Vehicle(3, 2, 2, 1000), [make_box()])
     assert not_placed == []
     assert (placed[0].x, placed[0].y, placed[0].z) == (0, 0, 0)
 
 
-def test_pack_row_along_x():
-    placed, not_placed = pack(Vehicle(3, 1, 1, 1000), [make_box(quantity=3)])
+def test_pack_layers_row_along_x():
+    placed, not_placed = pack_layers(Vehicle(3, 1, 1, 1000), [make_box(quantity=3)])
     assert [p.x for p in placed] == [0, 1, 2]
     assert not_placed == []
 
 
-def test_pack_new_row():
-    placed, _ = pack(Vehicle(3, 2, 1, 1000), [make_box(quantity=4)])
+def test_pack_layers_new_row():
+    placed, _ = pack_layers(Vehicle(3, 2, 1, 1000), [make_box(quantity=4)])
     last = placed[3]
     assert (last.x, last.y, last.z) == (0, 1, 0)
 
 
-def test_pack_new_layer():
-    placed, _ = pack(Vehicle(1, 1, 2, 1000), [make_box(quantity=2)])
+def test_pack_layers_new_layer():
+    placed, _ = pack_layers(Vehicle(1, 1, 2, 1000), [make_box(quantity=2)])
     assert (placed[1].x, placed[1].y, placed[1].z) == (0, 0, 1)
 
 
-def test_pack_layer_uses_tallest_box():
+def test_pack_layers_layer_uses_tallest_box():
     truck = Vehicle(2, 1, 3, 1000)
-    placed, not_placed = pack(truck, [make_box(1, 1, 2), make_box(1, 1, 1, quantity=2)])
+    placed, not_placed = pack_layers(
+        truck, [make_box(1, 1, 2), make_box(1, 1, 1, quantity=2)]
+    )
     assert not_placed == []
     assert placed[2].z == 2
 
 
-def test_pack_box_larger_than_vehicle():
-    placed, not_placed = pack(Vehicle(3, 2, 2, 1000), [make_box(4, 1, 1)])
+def test_pack_layers_box_larger_than_vehicle():
+    placed, not_placed = pack_layers(Vehicle(3, 2, 2, 1000), [make_box(4, 1, 1)])
     assert placed == []
     assert len(not_placed) == 1
 
 
-def test_pack_vehicle_full():
+def test_pack_layers_vehicle_full():
     truck = Vehicle(3.0, 1.9, 1.8, 100000)
-    placed, not_placed = pack(truck, [Cargo(0.5, 0.4, 0.3, 1, quantity=150)])
+    placed, not_placed = pack_layers(truck, [Cargo(0.5, 0.4, 0.3, 1, quantity=150)])
     assert len(placed) == 144  # 6 × 4 × 6
     assert len(not_placed) == 6
 
 
-def test_pack_example_from_plan():
+def test_pack_layers_example_from_plan():
     truck = Vehicle(3.0, 1.9, 1.8, 1500)
-    placed, not_placed = pack(truck, [Cargo(0.5, 0.4, 0.3, 10, quantity=20)])
+    placed, not_placed = pack_layers(truck, [Cargo(0.5, 0.4, 0.3, 10, quantity=20)])
     assert len(placed) == 20
     assert not_placed == []
 
 
-def test_pack_biggest_first():
+def test_pack_layers_biggest_first():
     truck = Vehicle(2, 1, 1, 1000)
     small = make_box(1, 1, 1, name="small")
     big = make_box(1.5, 1, 1, name="big")
-    placed, _ = pack(truck, [small, big])
+    placed, _ = pack_layers(truck, [small, big])
     assert placed[0].cargo.name == "big"
     assert placed[0].x == 0
 
 
-def test_pack_keeps_all_items():
+def test_pack_layers_keeps_all_items():
     truck = Vehicle(3.0, 1.9, 1.8, 100000)
     cargos = [
         Cargo(0.5, 0.4, 0.3, 10, quantity=200),
         Cargo(1.2, 0.8, 1.5, 100, quantity=3),
         Cargo(4, 1, 1, 5),
     ]
-    placed, not_placed = pack(truck, cargos)
+    placed, not_placed = pack_layers(truck, cargos)
     assert len(placed) + len(not_placed) == 204
 
 
-def test_pack_respects_max_weight():
+def test_pack_layers_respects_max_weight():
     truck = Vehicle(10, 10, 10, 5)
-    placed, not_placed = pack(truck, [make_box(weight=2, quantity=10)])
+    placed, not_placed = pack_layers(truck, [make_box(weight=2, quantity=10)])
     assert len(placed) == 2
     assert len(not_placed) == 8
 
 
-def test_pack_float_sizes_touching_wall():
+def test_pack_layers_float_sizes_touching_wall():
     truck = Vehicle(0.3, 1, 1, 1000)
-    placed, _ = pack(truck, [Cargo(0.1, 1, 1, 1, quantity=3)])
+    placed, _ = pack_layers(truck, [Cargo(0.1, 1, 1, 1, quantity=3)])
     assert len(placed) == 3
 
 
-def test_pack_invariant_no_overlaps_and_inside():
+def test_pack_layers_invariant_no_overlaps_and_inside():
     truck = Vehicle(3.0, 1.9, 1.8, 100000)
     cargos = [
         Cargo(0.5, 0.4, 0.3, 10, quantity=40),
         Cargo(1.2, 0.8, 1.5, 100, quantity=3),
         Cargo(0.7, 0.3, 0.9, 5, quantity=7),
     ]
-    placed, _ = pack(truck, cargos)
+    placed, _ = pack_layers(truck, cargos)
 
     assert len(placed) > 0
     for item in placed:
@@ -149,14 +153,14 @@ def test_pack_invariant_no_overlaps_and_inside():
 
 
 @pytest.mark.xfail(reason="послойная укладка не проверяет опору")
-def test_pack_leaves_no_floating_boxes():
+def test_pack_layers_leaves_no_floating_boxes():
     truck = Vehicle(2, 1, 4, 1000)
     cargos = [
         Cargo(1.5, 1, 1, 1, name="flat"),
         Cargo(0.5, 1, 2, 1, name="tall"),
         Cargo(0.9, 1, 1, 1, name="top"),
     ]
-    placed, _ = pack(truck, cargos)
+    placed, _ = pack_layers(truck, cargos)
     assert validate(truck, placed) == []
 
 
@@ -199,3 +203,117 @@ def test_orientations_do_not_change_original():
     box = make_box(1, 2, 3)
     orientations(box)
     assert (box.length, box.width, box.height) == (1, 2, 3)
+
+
+# candidate_points
+
+
+def test_candidate_points_empty():
+    assert candidate_points([]) == [(0, 0, 0)]
+
+
+def test_candidate_points_after_one_box():
+    box = PlacedItem(make_box(1, 2, 3), 0, 0, 0)
+    assert candidate_points([box]) == [(0, 0, 0), (1, 0, 0), (0, 2, 0), (0, 0, 3)]
+
+
+# pack
+def test_pack_empty():
+    assert pack(Vehicle(3, 1, 1, 1000), []) == ([], [])
+
+
+def test_pack_single_box_lies_flat_at_origin():
+    placed, not_placed = pack(Vehicle(3, 2, 2, 1000), [make_box(2, 1, 0.5)])
+    assert not_placed == []
+    assert (placed[0].x, placed[0].y, placed[0].z) == (0, 0, 0)
+    assert placed[0].cargo.height == 0.5  # лежит плашмя
+
+
+def test_pack_two_boxes_in_row():
+    truck = Vehicle(3, 1, 0.5, 1000)
+    placed, not_placed = pack(truck, [make_box(1.5, 1, 0.5, quantity=2)])
+    assert not_placed == []
+    assert [p.x for p in placed] == [0, 1.5]
+
+
+def test_pack_stacks_on_strong_box():
+    truck = Vehicle(1, 2, 1, 1000)
+    bottom = make_box(1, 2, 0.5, weight=10, max_load_above=10, name="bottom")
+    top = make_box(1, 2, 0.5, weight=5, name="top")
+    placed, not_placed = pack(truck, [bottom, top])
+    assert not_placed == []
+    assert placed[0].cargo.name == "bottom"
+    assert placed[1].z == 0.5
+
+
+def test_pack_does_not_stack_on_fragile_box():
+    truck = Vehicle(1, 2, 1, 1000)
+    bottom = make_box(1, 2, 0.5, weight=10, max_load_above=0)
+    top = make_box(1, 2, 0.5, weight=5)
+    placed, not_placed = pack(truck, [bottom, top])
+    assert len(placed) == 1
+    assert len(not_placed) == 1
+
+
+def test_pack_rotates_box_to_fit():
+    # коробка 2x1x1 влезает в кузов 1x2x1 только развёрнутой
+    placed, not_placed = pack(Vehicle(1, 2, 1, 1000), [make_box(2, 1, 1)])
+    assert not_placed == []
+    assert (placed[0].cargo.length, placed[0].cargo.width) == (1, 2)
+
+
+def test_pack_lies_down_when_not_upright():
+    # коробка высотой 2 в кузове высотой 1: можно только положить на бок
+    truck = Vehicle(3, 1, 1, 1000)
+    placed, not_placed = pack(truck, [make_box(1, 1, 2)])
+    assert not_placed == []
+    assert placed[0].cargo.height == 1
+
+
+def test_pack_upright_box_cannot_lie_down():
+    truck = Vehicle(3, 1, 1, 1000)
+    placed, not_placed = pack(truck, [make_box(1, 1, 2, upright=True)])
+    assert placed == []
+    assert len(not_placed) == 1
+
+
+def test_pack_leaves_no_floating_boxes():
+    truck = Vehicle(2, 1, 4, 1000)
+    cargos = [
+        Cargo(1.5, 1, 1, 1, name="flat", max_load_above=50),
+        Cargo(0.5, 1, 2, 1, name="tall", max_load_above=50),
+        Cargo(0.9, 1, 1, 1, name="top"),
+    ]
+    placed, not_placed = pack(truck, cargos)
+    assert not_placed == []
+    assert validate(truck, placed) == []
+
+
+def test_pack_respects_max_weight():
+    truck = Vehicle(10, 10, 10, 5)
+    placed, not_placed = pack(truck, [make_box(1, 2, 3, weight=2, quantity=10)])
+    assert len(placed) == 2
+    assert len(not_placed) == 8
+
+
+def test_pack_random_cargos_always_valid():
+    random.seed(1)
+    truck = Vehicle(3.0, 1.9, 1.8, 600)
+
+    for _ in range(20):
+        cargos = [
+            Cargo(
+                length=round(random.uniform(0.2, 1.2), 1),
+                width=round(random.uniform(0.2, 1.0), 1),
+                height=round(random.uniform(0.2, 1.0), 1),
+                weight=random.randint(1, 40),
+                quantity=random.randint(1, 6),
+                max_load_above=random.choice([0, 30, 100]),
+            )
+            for _ in range(10)
+        ]
+        placed, not_placed = pack(truck, cargos)
+
+        assert validate(truck, placed) == []
+        assert sum(p.cargo.weight for p in placed) <= truck.max_weight
+        assert len(placed) + len(not_placed) == sum(c.quantity for c in cargos)

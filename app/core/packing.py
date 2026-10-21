@@ -2,7 +2,7 @@ from typing import List
 from dataclasses import replace
 from itertools import permutations
 
-from app.core.checks import EPS
+from app.core.checks import EPS, can_place
 
 from app.core.models import Cargo, Vehicle, PlacedItem
 
@@ -32,7 +32,9 @@ def orientations(cargo: Cargo) -> List[Cargo]:
     return [replace(cargo, length=l, width=w, height=h) for l, w, h in sorted(sizes)]
 
 
-def pack(vehicle: Vehicle, cargos: List[Cargo]) -> tuple[list[PlacedItem], list[Cargo]]:
+def pack_layers(
+    vehicle: Vehicle, cargos: List[Cargo]
+) -> tuple[list[PlacedItem], list[Cargo]]:
 
     items = sorted(expand(cargos), key=lambda c: c.volume, reverse=True)
 
@@ -81,5 +83,53 @@ def pack(vehicle: Vehicle, cargos: List[Cargo]) -> tuple[list[PlacedItem], list[
 
         row_width = max(row_width, item.width)
         layer_height = max(layer_height, item.height)
+
+    return placed, not_placed
+
+
+def candidate_points(placed: List[PlacedItem]) -> list[tuple]:
+    """
+    Точки, где можно попробовать поставить следующую коробку.
+    """
+
+    points = {(0, 0, 0)}
+
+    for p in placed:
+        points.add((p.x + p.cargo.length, p.y, p.z))  # справа
+        points.add((p.x, p.y + p.cargo.width, p.z))  # спереди
+        points.add((p.x, p.y, p.z + p.cargo.height))  # сверху
+
+    return sorted(points, key=lambda pt: (pt[2], pt[1], pt[0]))
+
+
+def pack(vehicle: Vehicle, cargos: List[Cargo]) -> tuple[list[PlacedItem], list[Cargo]]:
+    items = sorted(expand(cargos), key=lambda c: c.volume, reverse=True)
+
+    placed = []
+    not_placed = []
+    total_weight = 0
+
+    for item in items:
+        best = None
+        points = candidate_points(placed)
+
+        variants = sorted(orientations(item), key=lambda o: (o.height, -o.length))
+
+        for oriented in variants:
+            for x, y, z in points:
+                key = (z, y, x)
+                if best is not None and key >= best[0]:
+                    break
+
+                candidate = PlacedItem(oriented, x, y, z)
+                if can_place(vehicle, candidate, placed, total_weight):
+                    best = (key, candidate)
+                    break
+
+        if best is None:
+            not_placed.append(item)
+        else:
+            placed.append(best[1])
+            total_weight += item.weight
 
     return placed, not_placed
