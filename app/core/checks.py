@@ -1,6 +1,7 @@
 from typing import List
 
 from app.core.models import Cargo, Vehicle, PlacedItem, LoadResult
+from app.core.balance import axle_loads
 
 EPS = 1e-9
 MIN_SUPPORT_AREA = 0.7  # Минимум площади основания, которая должна на что-то опираться
@@ -47,6 +48,21 @@ def overlaps(a: PlacedItem, b: PlacedItem) -> bool:
     overlap_y = segments_overlap(a.y, a.y + a.cargo.width, b.y, b.y + b.cargo.width)
     overlap_z = segments_overlap(a.z, a.z + a.cargo.height, b.z, b.z + b.cargo.height)
     return overlap_x and overlap_y and overlap_z
+
+
+def blocks(a: PlacedItem, b: PlacedItem) -> bool:
+    """b загораживает a: b выгружают позже, а она стоит сверху на a
+    или между a и дверями (двери на x = length)."""
+    if b.cargo.stop <= a.cargo.stop:
+        return False
+
+    overlap_x = segments_overlap(a.x, a.x + a.cargo.length, b.x, b.x + b.cargo.length)
+    overlap_y = segments_overlap(a.y, a.y + a.cargo.width, b.y, b.y + b.cargo.width)
+    overlap_z = segments_overlap(a.z, a.z + a.cargo.height, b.z, b.z + b.cargo.height)
+
+    above = b.z >= a.z + a.cargo.height - EPS and overlap_x and overlap_y
+    in_front_of_door = b.x >= a.x + a.cargo.length - EPS and overlap_y and overlap_z
+    return above or in_front_of_door
 
 
 def contact_area(a: PlacedItem, b: PlacedItem) -> float:
@@ -125,6 +141,25 @@ def validate(vehicle: Vehicle, placed: list[PlacedItem]) -> list[str]:
             if overlaps(a, placed[j]):
                 problems.append(f"items {i} and {j} overlap")
 
+    for i, a in enumerate(placed):
+        for j, b in enumerate(placed):
+            if i != j and blocks(a, b):
+                problems.append(f"item {i} is blocked by item {j}")
+
+    loads = axle_loads(vehicle, placed)
+    if loads is not None:
+        front, rear = loads
+        if (
+            vehicle.max_front_axle_load is not None
+            and front > vehicle.max_front_axle_load + EPS
+        ):
+            problems.append("front axle is overloaded")
+        if (
+            vehicle.max_rear_axle_load is not None
+            and rear > vehicle.max_rear_axle_load + EPS
+        ):
+            problems.append("rear axle is overloaded")
+
     return problems
 
 
@@ -145,6 +180,8 @@ def can_place(
 
     for other in placed:
         if overlaps(candidate, other):
+            return False
+        if blocks(other, candidate) or blocks(candidate, other):
             return False
 
     if not is_supported(candidate, placed):

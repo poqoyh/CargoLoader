@@ -10,6 +10,7 @@ from app.core.checks import (
     is_overloaded,
     validate,
     can_place,
+    blocks,
 )
 
 
@@ -377,3 +378,84 @@ def test_cannot_place_under_box_it_cannot_carry():
     bridge = PlacedItem(make_box(2.2, 1, 1, weight=5), 0, 0, 1)  # лежит на a1 и a2
     gap_box = PlacedItem(make_box(0.2, 1, 1), 1, 0, 0)  # в зазоре, max_load_above=0
     assert can_place(truck, gap_box, [a1, a2, bridge], 10) is False
+
+
+#blocks (порядок выгрузки)
+
+def test_blocks_box_on_top_with_later_stop():
+    a = PlacedItem(make_box(1, 2, 0.5, stop=1), 0, 0, 0)
+    b = PlacedItem(make_box(1, 2, 0.5, stop=2), 0, 0, 0.5)
+    assert blocks(a, b) is True
+
+
+def test_blocks_box_between_a_and_door():
+    a = PlacedItem(make_box(1, 2, 0.5, stop=1), 0, 0, 0)
+    b = PlacedItem(make_box(1, 2, 0.5, stop=2), 1, 0, 0)  # ближе к дверям
+    assert blocks(a, b) is True
+
+
+def test_does_not_block_if_box_is_deeper():
+    a = PlacedItem(make_box(1, 2, 0.5, stop=1), 1, 0, 0)
+    b = PlacedItem(make_box(1, 2, 0.5, stop=2), 0, 0, 0)  # ближе к кабине
+    assert blocks(a, b) is False
+
+
+def test_does_not_block_if_beside():
+    a = PlacedItem(make_box(1, 1, 0.5, stop=1), 0, 0, 0)
+    b = PlacedItem(make_box(1, 1, 0.5, stop=2), 1, 1, 0)  # другой ряд по y
+    assert blocks(a, b) is False
+
+
+def test_does_not_block_if_same_or_earlier_stop():
+    a = PlacedItem(make_box(1, 2, 0.5, stop=2), 0, 0, 0)
+    same = PlacedItem(make_box(1, 2, 0.5, stop=2), 1, 0, 0)
+    earlier = PlacedItem(make_box(1, 2, 0.5, stop=1), 1, 0, 0)
+    assert blocks(a, same) is False
+    assert blocks(a, earlier) is False
+
+
+def test_validate_blocked():
+    a = PlacedItem(make_box(1, 2, 0.5, stop=1), 0, 0, 0)
+    b = PlacedItem(make_box(1, 2, 0.5, stop=2), 1, 0, 0)
+    assert validate(TRUCK, [a, b]) == ["item 0 is blocked by item 1"]
+
+
+def test_validate_not_blocked_when_order_is_right():
+    deep = PlacedItem(make_box(1, 2, 0.5, stop=2), 0, 0, 0)
+    near_door = PlacedItem(make_box(1, 2, 0.5, stop=1), 1, 0, 0)
+    assert validate(TRUCK, [deep, near_door]) == []
+
+
+def test_cannot_place_box_that_blocks_another():
+    placed = [PlacedItem(make_box(1, 2, 0.5, stop=1), 0, 0, 0)]
+    candidate = PlacedItem(make_box(1, 2, 0.5, stop=2), 1, 0, 0)
+    assert can_place(TRUCK, candidate, placed, 1) is False
+
+
+def test_can_place_box_nearer_to_door_with_earlier_stop():
+    placed = [PlacedItem(make_box(1, 2, 0.5, stop=2), 0, 0, 0)]
+    candidate = PlacedItem(make_box(1, 2, 0.5, stop=1), 1, 0, 0)
+    assert can_place(TRUCK, candidate, placed, 1) is True
+
+
+#validate: оси
+
+def test_validate_front_axle_overloaded():
+    truck = Vehicle(3, 2, 2, 1000, front_axle_x=0.5, rear_axle_x=2.5,
+                    max_front_axle_load=50, max_rear_axle_load=500)
+    item = PlacedItem(make_box(1, 2, 1, weight=100), 0, 0, 0)  # центр x=0.5
+    assert validate(truck, [item]) == ["front axle is overloaded"]
+
+
+def test_validate_rear_axle_overloaded():
+    truck = Vehicle(3, 2, 2, 1000, front_axle_x=0.5, rear_axle_x=2.5,
+                    max_front_axle_load=500, max_rear_axle_load=50)
+    item = PlacedItem(make_box(1, 2, 1, weight=100), 2, 0, 0)  # центр x=2.5
+    assert validate(truck, [item]) == ["rear axle is overloaded"]
+
+
+def test_validate_axles_ok():
+    truck = Vehicle(3, 2, 2, 1000, front_axle_x=0.5, rear_axle_x=2.5,
+                    max_front_axle_load=60, max_rear_axle_load=60)
+    item = PlacedItem(make_box(1, 2, 1, weight=100), 1, 0, 0)  # центр x=1.5: 50 / 50
+    assert validate(truck, [item]) == []

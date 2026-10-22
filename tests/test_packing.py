@@ -309,6 +309,7 @@ def test_pack_random_cargos_always_valid():
                 weight=random.randint(1, 40),
                 quantity=random.randint(1, 6),
                 max_load_above=random.choice([0, 30, 100]),
+                stop=random.randint(1, 3),
             )
             for _ in range(10)
         ]
@@ -317,3 +318,23 @@ def test_pack_random_cargos_always_valid():
         assert validate(truck, placed) == []
         assert sum(p.cargo.weight for p in placed) <= truck.max_weight
         assert len(placed) + len(not_placed) == sum(c.quantity for c in cargos)
+
+
+# порядок выгрузки
+def test_pack_later_stop_goes_deeper():
+    truck = Vehicle(2, 1, 0.5, 1000)
+    first = make_box(1, 1, 0.5, name="first", stop=1)
+    second = make_box(1, 1, 0.5, name="second", stop=2)
+    placed, not_placed = pack(truck, [first, second])
+    assert not_placed == []
+    assert placed[0].cargo.name == "second" and placed[0].x == 0   # ближе к кабине
+    assert placed[1].cargo.name == "first" and placed[1].x == 1    # ближе к дверям
+    assert validate(truck, placed) == []
+
+
+def test_pack_three_stops_in_row():
+    truck = Vehicle(3, 1, 0.5, 1000)
+    cargos = [make_box(1, 1, 0.5, stop=s) for s in (1, 3, 2)]
+    placed, _ = pack(truck, cargos)
+    assert [p.cargo.stop for p in placed] == [3, 2, 1]
+    assert [p.x for p in placed] == [0, 1, 2]

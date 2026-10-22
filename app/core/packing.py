@@ -103,7 +103,8 @@ def candidate_points(placed: List[PlacedItem]) -> list[tuple]:
 
 
 def pack(vehicle: Vehicle, cargos: List[Cargo]) -> tuple[list[PlacedItem], list[Cargo]]:
-    items = sorted(expand(cargos), key=lambda c: c.volume, reverse=True)
+    # сначала грузы с поздней выгрузкой (они лягут глубже), внутри - крупные вперёд
+    items = sorted(expand(cargos), key=lambda c: (-c.stop, -c.volume))
 
     placed = []
     not_placed = []

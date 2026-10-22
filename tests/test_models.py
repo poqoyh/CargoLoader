@@ -107,3 +107,13 @@ def test_placed_item_is_frozen():
     item = PlacedItem(Cargo(length=1, width=1, height=1, weight=1), 0, 0, 0)
     with pytest.raises(FrozenInstanceError):
         item.x = 5
+
+
+def test_cargo_invalid_stop():
+    with pytest.raises(ValueError):
+        Cargo(length=1, width=1, height=1, weight=1, stop=0)
+
+
+def test_vehicle_rear_axle_must_be_behind_front_axle():
+    with pytest.raises(ValueError):
+        Vehicle(3, 2, 2, 1000, front_axle_x=2.5, rear_axle_x=0.5)
